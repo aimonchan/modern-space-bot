@@ -1,15 +1,37 @@
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import create_engine, text
 import os
+from typing import TypedDict
+from langgraph.graph import StateGraph, END
 
 app = FastAPI(title="Modern Space API")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:secretpassword@db:5432/modern_space")
 engine = create_engine(DATABASE_URL)
 
+# 1. Define LangGraph State
+class AgentState(TypedDict):
+    messages: list[str]
+    response: str
+
+# 2. Define Node Logic (AI Agent Node)
+def agent_node(state: AgentState):
+    latest_message = state["messages"][-1] if state["messages"] else ""
+    # ယာယီ တုံ့ပြန်မှု logic (နောင်အခါ LLM / pgvector RAG ဖြင့် အစားထိုးမည်)
+    reply = f"Modern Space Agent received: '{latest_message}'. Processing your request..."
+    return {"response": reply}
+
+# 3. Build LangGraph Workflow
+workflow = StateGraph(AgentState)
+workflow.add_node("agent", agent_node)
+workflow.set_entry_point("agent")
+workflow.add_edge("agent", END)
+agent_app = workflow.compile()
+
+
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "Modern Space Backend is running smoothly!"}
+    return {"status": "ok", "message": "Modern Space Backend with LangGraph is running smoothly!"}
 
 @app.get("/test-db")
 def test_db():
@@ -26,5 +48,15 @@ def test_db():
             "message": "Database connected successfully with pgvector!",
             "database_version": db_version
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 4. Test Agent Endpoint
+@app.post("/chat")
+def chat_with_agent(message: str):
+    try:
+        initial_state = {"messages": [message], "response": ""}
+        result = agent_app.invoke(initial_state)
+        return {"status": "success", "result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
