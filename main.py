@@ -3,6 +3,29 @@ from sqlalchemy import create_engine, text
 import os
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
+from pydantic import BaseModel
+
+# 1. Define Webhook Payload Structure
+class WebhookPayload(BaseModel):
+    sender_id: str
+    message: str
+
+# 2. Add Webhook Handshake Endpoint
+@app.post("/webhook")
+def handle_webhook(payload: WebhookPayload):
+    try:
+        # LangGraph Agent State သို့ ပေးပို့ရန် စီစဉ်ခြင်း
+        initial_state = {"messages": [payload.message], "response": ""}
+        result = agent_app.invoke(initial_state)
+        
+        # ေနာက်ပိုင်း ChatBotX / Social Media သို့ ပြန်ပို့ရမယ့် Response Format
+        return {
+            "status": "success",
+            "sender_id": payload.sender_id,
+            "agent_response": result["response"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 app = FastAPI(title="Modern Space API")
 
